@@ -1,0 +1,52 @@
+proc sql ;
+CREATE TABLE TEMP AS 
+select name 
+  from dictionary.columns
+  where memname = 'YourTable' /* Change – data table with variables */
+  ;
+quit ;
+
+DATA TEMP;
+SET TEMP;
+WHERE NAME NOT IN ("UID"); /* Change - Take out UID */
+run;
+
+proc sql noprint;                              
+ select NAME into :ParamList separated by ' '
+from TEMP;
+quit;
+%put ParamList = &ParamList;   /* display list in SAS log */
+
+%macro loop(data,vlist);
+%let nwords=%sysfunc(countw(&vlist));
+
+     %do i=1 %to &nwords;
+           %let cname = %scan(&vlist, &i);
+
+           %do;            
+                data temp_type;  
+                     set &data. (obs=1);
+                     type =  vtype(&cname.) ;   
+                run;
+                proc sql noprint;                              
+                     select type into :type separated by ' '
+                    from temp_type;
+                quit;
+           %end;
+
+           %if &type. = C %then
+                %do;
+                     PROC SUMMARY DATA=&data. NWAY MISSING;
+                     CLASS &cname.;
+                     OUTPUT OUT=&cname.;
+                %end;
+           %else 
+                %do;
+                     PROC SUMMARY DATA=&data. NWAY MISSING QNTLDEF=3 qmethod=OS;
+                     VAR &cname.;
+                     OUTPUT OUT=&cname. MIN=p1= p5=p10= p25=p50= p75=p90= p95=p99= MAX= / autoname;
+                %end; 
+     %end;
+%mend;
+
+%loop(YourTable,&ParamList); /* Change - data table with variables */ 
